@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rein"
+version = "0.1.0"
+description = "Agent-agnostic guardrails that keep AI-written code clean and secure."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Abdulsamet Atas" }]
+keywords = ["ai", "agents", "security", "secrets", "git", "guardrails", "mcp"]
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+dependencies = []
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0.0"]
+dev = ["pytest>=8.0"]
+lint = ["ruff>=0.4"]
+bandit = ["bandit>=1.7"]
+
+[project.scripts]
+rein = "rein.cli.__main__:main"
+rein-mcp = "rein.mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rein"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

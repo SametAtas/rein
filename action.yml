@@ -1,0 +1,37 @@
+name: "rein review"
+description: "Run rein over a path and upload findings as SARIF for code scanning."
+
+inputs:
+  path:
+    description: "File or directory to review."
+    required: false
+    default: "src/"
+  output:
+    description: "Path to write the SARIF report to."
+    required: false
+    default: "rein.sarif"
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install rein
+      shell: bash
+      # Install from the action's own checkout, not the caller's workspace, so
+      # external callers get rein installed rather than their own repo.
+      run: pip install "${{ github.action_path }}"
+
+    - name: Run rein review
+      shell: bash
+      # A BLOCK verdict exits non-zero; continue so the SARIF still uploads.
+      continue-on-error: true
+      run: rein review "${{ inputs.path }}" --format sarif > "${{ inputs.output }}"
+
+    - name: Upload SARIF
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: ${{ inputs.output }}
