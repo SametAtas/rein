@@ -1,0 +1,38 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e . pytest
+      - run: pytest -q
+      - run: rein review src/
+      - run: rein commit-check
+
+  action:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read  # checkout only; upload:false below needs no other scope
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test the GitHub Action (review + SARIF, no upload)
+        # upload:false: code scanning (Security tab) needs GitHub Advanced
+        # Security, absent on this private repo. The self-test proves the action
+        # installs rein, runs review, and emits valid SARIF; the Security-tab
+        # upload is a consumer-side concern exercised on repos that have it.
+        uses: ./
+        with:
+          path: src/
+          upload: false
+      - name: Assert SARIF was produced and is valid
+        run: |
+          test -s rein.sarif
+          python -c "import json,sys; d=json.load(open('rein.sarif')); assert d.get('version')=='2.1.0', d.get('version'); assert d['runs'][0]['tool']['driver']['name']=='rein'; print('SARIF valid:', len(d['runs'][0].get('results', [])), 'results')"
