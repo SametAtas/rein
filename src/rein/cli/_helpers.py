@@ -5,6 +5,7 @@ Purely utility functions and detector wrappers for the thin CLI adapter.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -18,6 +19,7 @@ from ..core import custom
 from ..core.code import code_domain
 from ..core.conventions import scan_profile
 from ..core.diffs import parse_added_lines
+from ..core.duplication import build_function_index, check_duplicate_functions
 from ..core.findings import Finding
 from ..core.parsing import safe_parse
 from ..core.profile import Profile, ProfileError, parse_profile, profile_invalid_finding
@@ -127,19 +129,69 @@ def _collect_stdin_findings(
     return findings
 
 
+def _build_function_index(
+    root: str | None, changed: dict[str, ast.Module | None]
+) -> dict[str, list[str]]:
+    """Signature -> `label:funcname` index for diff-scoped duplicate detection.
+
+    Includes every parsed changed file (labeled by its diff path, so the checker
+    excludes a function as its own duplicate) plus, when a project root exists,
+    every other project `.py` parsed once - the cross-file substrate. With no
+    project root the index is the changed files alone (within-diff detection).
+    Adapter-side I/O on top of the pure `build_function_index`; a changed file is
+    deduped by absolute path so it is never indexed twice under two labels.
+    """
+    modules: dict[str, ast.AST] = {p: t for p, t in changed.items() if t is not None}
+    if root is not None:
+        changed_abs = {os.path.abspath(p) for p in changed}
+        for fpath in _iter_files([root]):
+            if not fpath.endswith(".py") or os.path.abspath(fpath) in changed_abs:
+                continue
+            try:
+                with open(fpath, encoding="utf-8") as fh:
+                    tree = safe_parse(fh.read())
+            except (OSError, UnicodeDecodeError):
+                continue
+            if tree is not None:
+                modules[os.path.relpath(fpath, root)] = tree
+    return build_function_index(modules)
+
+
 def _collect_diff_findings(diff_text: str, custom_rules: tuple[custom.CustomRule, ...] = ()) -> list[Finding]:
     findings: list[Finding] = []
-    for p in sorted({al.path for al in parse_added_lines(diff_text) if al.path}):
+    paths = sorted({al.path for al in parse_added_lines(diff_text) if al.path})
+
+    # Parse each changed file once; the tree is shared by code_domain, the dup
+    # checker, and the project index (single-parse perf contract).
+    sources: dict[str, str] = {}
+    trees: dict[str, ast.Module | None] = {}
+    for p in paths:
         try:
             with open(p, encoding="utf-8") as fh:
-                content = fh.read()
+                sources[p] = fh.read()
         except (OSError, UnicodeDecodeError):
             continue
+        trees[p] = safe_parse(sources[p])
 
-        def custom_domain(t: str, p_: str | None) -> list[Finding]:
-            return code_domain(t, p_) + custom.scan_custom(t, p_, custom_rules)
+    index = _build_function_index(_discover_project_root(), trees)
+
+    for p in paths:
+        if p not in sources:
+            continue
+        content, tree = sources[p], trees[p]
+
+        def custom_domain(t: str, p_: str | None, _tree: ast.Module | None = tree) -> list[Finding]:
+            return code_domain(t, p_, tree=_tree) + custom.scan_custom(t, p_, custom_rules)
 
         findings.extend(review_diff_findings(content, diff_text, p, domain=custom_domain))
+
+        # dup.function is diff-scoped: only functions the agent ADDED are judged,
+        # so review_diff_findings' added-line filter (not code_domain) gates it.
+        if tree is not None:
+            def dup_domain(t: str, p_: str | None, _tree: ast.Module = tree) -> list[Finding]:
+                return check_duplicate_functions(_tree, p_, index, text=t)
+
+            findings.extend(review_diff_findings(content, diff_text, p, domain=dup_domain))
     return findings
 
 

@@ -56,7 +56,10 @@ _RULES: dict[str, Remediation] = {
 # Fallback by category prefix (rule_id before the first dot).
 _CATEGORY: dict[str, Remediation] = {
     "secret": Remediation(
-        "Remove the secret from source, rotate it, and load it from the environment.",
+        "Do not hardcode or inline this value. Reference it by name (e.g. "
+        "os.environ['NAME']) and supply the value out-of-band: an environment "
+        "variable, a secret manager (Vault, 1Password op run, Doppler), or an OS "
+        "keychain, so the value never appears in source or in an agent's context.",
         'os.environ.get("API_KEY")',
     ),
     "ruff": Remediation("Apply the fix from the ruff rule documentation for this code."),

@@ -103,7 +103,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run rein review
-        uses: SametAtas/rein@v0.3.2
+        uses: SametAtas/rein@v0.4.0
         with:
           path: src/
           output: rein.sarif

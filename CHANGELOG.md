@@ -3,6 +3,24 @@
 Notable changes to the `rein-engine` distribution. The import package and the
 `rein` command are unchanged across these versions.
 
+## 0.4.0
+
+### Added
+
+- `secret.exposed-output`: flag a secret-named variable passed straight to an
+  output sink (`print`, `logging.*`, `sys.stdout`/`sys.stderr.write`), where it
+  may leak to logs or output. MEDIUM severity, pure AST, pragma-respecting.
+- `dup.function`: on a diff review, flag an added function whose body duplicates
+  one already in the project. Fires only on an added `def` line; diff path only,
+  so whole-file reviews are unaffected. MEDIUM severity.
+
+### Changed
+
+- Sharper secret remediation guidance: secret findings now advise referencing
+  the value by name and supplying it out-of-band (environment variable, secret
+  manager, or OS keychain) so it never appears in source or in an agent's
+  context, instead of the briefer "load it from the environment" wording.
+
 ## 0.3.2
 
 ### Added

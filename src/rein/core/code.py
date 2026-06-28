@@ -12,6 +12,7 @@ from .findings import Finding
 from .lint import lint_text
 from .names import check_undefined_names
 from .parsing import safe_parse
+from .secret_output import scan_secret_output
 from .secrets import scan_text
 from .security import scan_security
 
@@ -28,6 +29,7 @@ def _python_findings(text: str, path: str | None, *, tree: ast.Module | None = N
     return (
         lint_text(text, path, tree=tree)
         + scan_security(text, path, tree=tree)
+        + scan_secret_output(text, path, tree=tree)
         + check_undefined_names(tree, path, text=text)
     )
 

@@ -35,5 +35,27 @@ def test_suggest_fix_category_fallback() -> None:
     assert "ruff rule documentation" in fix2.guidance
 
 
+def test_secret_guidance_steers_to_safe_pattern() -> None:
+    # Every secret.* rule falls through to the category entry, so one check
+    # covers the family. The guidance must steer to referencing the value by
+    # name and supplying it out-of-band, not merely name the problem.
+    for rule_id in ("secret.aws-access-key", "secret.high-entropy-assignment", "secret.github-token"):
+        fix = suggest_fix(_finding(rule_id))
+        assert isinstance(fix, Remediation)
+        assert "out-of-band" in fix.guidance
+        assert "os.environ['NAME']" in fix.guidance
+        assert "secret manager" in fix.guidance
+
+
+def test_secret_guidance_does_not_overclaim_runtime_isolation() -> None:
+    # Honesty: rein is shift-left, code-time. The steering must not claim it
+    # keeps secrets out of the model's traffic/context at runtime.
+    fix = suggest_fix(_finding("secret.aws-access-key"))
+    assert isinstance(fix, Remediation)
+    low = fix.guidance.lower()
+    for forbidden in ("runtime", "egress", "traffic", "proxy", "intercept"):
+        assert forbidden not in low
+
+
 def test_suggest_fix_unknown_returns_none() -> None:
     assert suggest_fix(_finding("totally.unknown")) is None
